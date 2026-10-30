@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Plushie Panic - WASM Engine Host</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #101612; /* Industrial Moss */
+            color: #ffb3c6;          /* Fairy Floss Glitch */
+            font-family: monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        #status-card {
+            border: 2px solid #4a6b6c; /* Copper Oxidation */
+            padding: 20px;
+            border-radius: 8px;
+            background: rgba(74, 107, 108, 0.1);
+            text-align: center;
+            max-width: 90%;
+        }
+        .spinner {
+            border: 4px solid rgba(255, 179, 198, 0.2);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #ffb3c6;
+            animation: spin 1s linear infinite;
+            margin: 15px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="status-card">
+        <h3 style="margin: 0 0 10px 0; color: #52b788;">PLUSHIE PANIC ENGINE</h3>
+        <p id="status-text">Loading Go WebAssembly Runtime...</p>
+        <div id="loading-spinner" class="spinner"></div>
+    </div>
+
+    <!-- Required Go WASM support polyfill script -->
+    <script src="wasm_exec.js"></script>
+
+    <script>
+        // Initialize Go WASM instance
+        if (!WebAssembly.instantiateStreaming) {
+            WebAssembly.instantiateStreaming = async (resp, importObject) => {
+                const source = await resp;
+                return await WebAssembly.instantiate(await source.arrayBuffer(), importObject);
+            };
+        }
+
+        const go = new Go();
+        
+        async function loadWasmEngine() {
+            try {
+                const result = await WebAssembly.instantiateStreaming(
+                    fetch("plushie_engine.wasm"), 
+                    go.importObject
+                );
+                
+                // Run the Go WebAssembly binary asynchronously
+                go.run(result.instance);
+
+                document.getElementById("status-text").innerText = "WASM Engine Online & Ready.";
+                document.getElementById("loading-spinner").style.display = "none";
+
+                // Notify Kotlin Android host if bridge is available
+                if (window.AndroidPlushieHost && typeof window.AndroidPlushieHost.postStateFromWasm === 'function') {
+                    window.AndroidPlushieHost.postStateFromWasm(JSON.stringify({
+                        player_x: 2,
+                        player_y: 2,
+                        stuffing_pct: 80,
+                        seam_status: "STABLE",
+                        message: "Go WASM initialized successfully in WebView."
+                    }));
+                }
+            } catch (err) {
+                console.error("Failed to load Plushie Panic WASM engine:", err);
+                document.getElementById("status-text").innerText = "Error: " + err.message;
+                document.getElementById("loading-spinner").style.display = "none";
+            }
+        }
+
+        loadWasmEngine();
+    </script>
+</body>
+</html>
